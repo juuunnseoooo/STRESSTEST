@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>스트레스 자가진단</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #eaf4f4;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 700px;
+      margin: 50px auto;
+      background-color: #ffffff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    }
+    h1, h2 {
+      text-align: center;
+      color: #333;
+    }
+    button {
+      background-color: #00a8cc;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px;
+    }
+    .question {
+      margin-bottom: 20px;
+    }
+    .result {
+      margin-top: 30px;
+      background-color: #f1faff;
+      padding: 20px;
+      border-left: 6px solid #00a8cc;
+      border-radius: 8px;
+    }
+    canvas {
+      margin-top: 20px;
+    }
+    .link-button {
+      background-color: transparent;
+      color: #0077aa;
+      text-decoration: underline;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      display: inline-block;
+      margin-top: 10px;
+    }
+    iframe {
+      width: 100%;
+      height: 315px;
+      margin-top: 20px;
+      border-radius: 12px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>스트레스 자가진단</h1>
+  <div id="intro">
+    <p>이 테스트는 20문항을 통해 스트레스 수준과 관련된 정신 건강 지표를 확인하고 힐링 콘텐츠를 추천합니다.</p>
+    <button onclick="startTest()">스트레스 자가진단 시작하기</button>
+    <button class="link-button" onclick="window.open('https://www.ncmh.go.kr/nimh/index.do', '_blank')">🔎 질문 출처 및 신빙성 보기 (국립정신건강센터)</button>
+  </div>
+
+  <form id="quizForm" style="display:none">
+    <div id="questionContainer"></div>
+    <div style="text-align:center; margin-top:20px;">
+      <button type="button" id="prevBtn" onclick="prevQuestion()" style="display:none">이전</button>
+      <button type="button" id="nextBtn" onclick="nextQuestion()">다음</button>
+      <button type="button" id="submitBtn" onclick="submitAnswers()" style="display:none">결과 보기</button>
+    </div>
+  </form>
+
+  <div id="result" class="result" style="display:none"></div>
+  <canvas id="resultChart" width="400" height="300" style="display:none"></canvas>
+  <div id="videoContainer" style="display:none"></div>
+</div>
+
+<script>
+  const questionsData = [
+    { question: "최근 2주 동안 거의 매일 우울하거나 슬픈 기분이 들었나요?", category: "우울증" },
+    { question: "평소에 관심 있거나 즐기던 활동에 대한 흥미가 감소했나요?", category: "우울증" },
+    { question: "스스로 무가치하다고 느끼거나 죄책감을 자주 느끼나요?", category: "우울증" },
+    { question: "에너지가 부족하거나 피로감을 자주 느끼나요?", category: "우울증" },
+    { question: "최근 자주 긴장하거나 불안한 느낌이 있나요?", category: "불안장애" },
+    { question: "걱정이 지나치게 많고 통제하기 어려운가요?", category: "불안장애" },
+    { question: "쉽게 놀라고 신경이 예민해졌나요?", category: "불안장애" },
+    { question: "불안으로 인해 일상생활에 어려움을 겪나요?", category: "불안장애" },
+    { question: "업무나 학업에 지쳐 무기력함을 느끼나요?", category: "번아웃" },
+    { question: "자신의 성취가 부족하다고 느끼며 의욕이 떨어졌나요?", category: "번아웃" },
+    { question: "일에 대한 냉소적 태도나 부정적인 감정을 자주 느끼나요?", category: "번아웃" },
+    { question: "충분히 쉬었는데도 피로가 풀리지 않나요?", category: "번아웃" },
+    { question: "갑자기 심장이 빨리 뛰거나 숨이 가빠진 적이 있나요?", category: "공황장애" },
+    { question: "공황발작으로 인해 일상생활에 지장을 받은 적이 있나요?", category: "공황장애" },
+    { question: "특정 상황이나 장소를 피하려고 하나요?", category: "공황장애" },
+    { question: "죽을 것 같은 극심한 두려움을 느낀 적이 있나요?", category: "공황장애" },
+    { question: "사람들과 대화할 때 과도하게 긴장하나요?", category: "사회불안장애" },
+    { question: "다른 사람들이 나를 부정적으로 평가한다고 생각하나요?", category: "사회불안장애" },
+    { question: "사람이 많은 장소에서 불편함이나 두려움을 느끼나요?", category: "사회불안장애" },
+    { question: "모임이나 발표를 피하려는 경향이 있나요?", category: "사회불안장애" },
+  ];
+
+  let currentQuestionIndex = 0;
+  const answers = new Array(questionsData.length).fill(null);
+
+  function startTest() {
+    document.getElementById("intro").style.display = "none";
+    document.getElementById("quizForm").style.display = "block";
+    showQuestion(currentQuestionIndex);
+  }
+
+  function showQuestion(index) {
+    const container = document.getElementById("questionContainer");
+    const q = questionsData[index];
+    container.innerHTML = `
+      <div class="question">
+        <p><strong>Q${index + 1}.</strong> ${q.question}</p>
+        <label><input type="radio" name="q" value="2" ${answers[index] === "2" ? "checked" : ""}> 자주</label><br>
+        <label><input type="radio" name="q" value="1" ${answers[index] === "1" ? "checked" : ""}> 가끔</label><br>
+        <label><input type="radio" name="q" value="0" ${answers[index] === "0" ? "checked" : ""}> 거의 없음</label>
+      </div>
+    `;
+
+    // 라디오 버튼 클릭 시 바로 다음 질문으로 이동
+    const radios = container.querySelectorAll('input[name="q"]');
+    radios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        saveAnswer();
+        if (currentQuestionIndex < questionsData.length - 1) {
+          currentQuestionIndex++;
+          showQuestion(currentQuestionIndex);
+        }
+      });
+    });
+
+    document.getElementById("prevBtn").style.display = index > 0 ? "inline-block" : "none";
+    document.getElementById("nextBtn").style.display = index < questionsData.length - 1 ? "inline-block" : "none";
+    document.getElementById("submitBtn").style.display = index === questionsData.length - 1 ? "inline-block" : "none";
+  }
+
+  function saveAnswer() {
+    const selected = document.querySelector('input[name="q"]:checked');
+    if (selected) {
+      answers[currentQuestionIndex] = selected.value;
+    }
+  }
+
+  function nextQuestion() {
+    saveAnswer();
+    if (answers[currentQuestionIndex] == null) {
+      alert("응답을 선택해주세요.");
+      return;
+    }
+    currentQuestionIndex++;
+    showQuestion(currentQuestionIndex);
+  }
+
+  function prevQuestion() {
+    saveAnswer();
+    currentQuestionIndex--;
+    showQuestion(currentQuestionIndex);
+  }
+
+  function submitAnswers() {
+    saveAnswer();
+    if (answers.includes(null)) {
+      alert("모든 문항에 응답해 주세요.");
+      return;
+    }
+
+    const scores = {
+      우울증: 0,
+      불안장애: 0,
+      번아웃: 0,
+      공황장애: 0,
+      사회불안장애: 0,
+    };
+
+    answers.forEach((val, i) => {
+      const category = questionsData[i].category;
+      scores[category] += parseInt(val);
+    });
+
+    showResults(scores);
+  }
+
+  function showResults(scores) {
+    const resultDiv = document.getElementById("result");
+    resultDiv.style.display = "block";
+    document.getElementById("resultChart").style.display = "block";
+    document.getElementById("videoContainer").style.display = "block";
+
+    // 가장 점수 높은 카테고리 추출
+    let maxCategory = "";
+    let maxScore = -1;
+    for (const [key, value] of Object.entries(scores)) {
+      if (value > maxScore) {
+        maxScore = value;
+        maxCategory = key;
+      }
+    }
+
+    let categoryDesc = {
+      "우울증": "우울증은 지속적인 슬픔, 무기력감, 흥미 상실 등이 특징인 정신 건강 문제입니다.",
+      "불안장애": "불안장애는 과도한 걱정과 긴장이 일상생활에 영향을 미치는 상태입니다.",
+      "번아웃": "번아웃은 장기간의 스트레스와 과로로 인한 신체적, 정신적 탈진 상태입니다.",
+      "공황장애": "공황장애는 갑작스럽고 반복적인 극심한 공포 발작을 경험하는 상태입니다.",
+      "사회불안장애": "사회불안장애는 사회적 상황에서 과도한 두려움과 긴장을 느끼는 상태입니다.",
+    };
+
+    resultDiv.innerHTML = `
+      <h2>진단 결과</h2>
+      <p><strong>가장 관련있는 정신 질환: ${maxCategory}</strong></p>
+      <p>${categoryDesc[maxCategory]}</p>
+      ${getHealingContent(maxCategory)}
+    `;
+
+    renderChart(scores);
+  }
+
+  // 유튜브 영상 임베드 (재생확인된 영상 ID 사용)
+  function getHealingContent(category) {
+    const videos = {
+      "우울증": "2OEL4P1Rz04",
+      "불안장애": "M-LJ5v7H8DA",
+      "번아웃": "KLFu4YV7CSs",
+      "공황장애": "Z0iaNw8-WzE",
+      "사회불안장애": "6zSfAWhVEOE",
+    };
+    const videoId = videos[category];
+    return `<p>힐링 영상:</p><iframe src="https://www.youtube.com/embed/${videoId}" title="힐링 영상" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+  }
+
+  function renderChart(scores) {
+    const ctx = document.getElementById('resultChart').getContext('2d');
+    if(window.barChart instanceof Chart) {
+      window.barChart.destroy();
+    }
+    window.barChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: Object.keys(scores),
+        datasets: [{
+          label: '점수',
+          data: Object.values(scores),
+          backgroundColor: [
+            '#ff6384',
+            '#36a2eb',
+            '#ffcd56',
+            '#4bc0c0',
+            '#9966ff'
+          ]
+        }]
+      },
+      options: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 8
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: context => `${context.parsed.y} 점`
+            }
+          }
+        }
+      }
+    });
+  }
+</script>
+</body>
+</html>
